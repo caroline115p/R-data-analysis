@@ -1,0 +1,217 @@
+---
+indivudtitle: "individual project"
+author: "Jihye Park"
+date: '2020-04-12'
+output: html_document
+---
+
+
+```{r setup, cache = F}
+knitr::opts_chunk$set(error = TRUE)
+```
+
+I found the data from the kaggle and it is about the suicide rates overview 1985 to 2016.This datasets collect all over the world data of the suicide case from 1985 to 2016. In the data it contains individual of the country, year, sex, age, count of suicides, population, country-year composite key, HDI for year, gdp for year for the country, gdp per capita and the generation. In this dataset, I want to find how the suicide rate is relate to the country's economy and other factors that's impact the suicide rate.
+```{r}
+data <- read.csv("~/Downloads/master.csv")
+data
+```
+As the dataset above, some columns are inefficient for the data so it is better to remove it such as country-year and country columns. Since, we are looking for gdp per capita/year for the datasets and it is repeated because gdp per capita is gdp divided by the population and gdp of year is total amount of it. So I can remove the columns about gdp for year so it will have more better clean datasets. I also made it to the sex column to be numeric so it can have a better fit for this dataset. 
+```{r}
+require(dplyr)
+data$sex = as.numeric(data$sex)
+data <- data %>% select(-country)
+data <- data %>% select(-country.year)
+data <- data %>% select(-gdp_for_year....)
+data
+
+```
+For the sex column, 1 means for female and 2 means for male. 
+From the data we have to clean it first to see what variables is relevant and use it for the prediction.
+```{r}
+summary(data)
+```
+```{r}
+require(GGally)
+library(ggplot2)
+ggcorr(data, label = TRUE, label_alpha = TRUE)
+```
+As we can see in the correlation coefficient matrix. We can see how each variables are positive relations and negative relations. For example gdp per capita has highly positively correlated with HDI for year. However, since ggcorr function can use with only numbers so that not all the variables are shown in the matrix. 
+Now, we use suicides rate for our dependent variable.
+```{r}
+fit_1 = lm(suicides.100k.pop~., data = data)
+summary(fit_1)
+```
+As in the fitting model for the dependent variable as suicides rate. From the summary, I can see that the sex, age,year, suicides_no,population, gdp per capita and the HDI for year has a significant p values so I can use it for our independent variables.
+
+```{r}
+plot(data$suicides.100k.pop,data$year)
+plot(data$suicides.100k.pop,data$age)
+plot(data$suicides.100k.pop,data$sex)
+plot(data$suicides.100k.pop,data$suicides_no)
+plot(data$suicides.100k.pop,data$population)
+plot(data$suicides.100k.pop,data$HDI.for.year)
+plot(data$suicides.100k.pop,data$gdp_per_capita....)
+```
+These are the plot that relationship with the sucide rate and the variables that are significant.As the plot shown in the above, we can relate that there is some relationship witht the gdp per capita and HDI for year with the suicide rates.
+
+<Correlation coefficient>
+```{r}
+library(ggpubr)
+
+test_1 = cor.test(data$suicides.100k.pop, data$HDI.for.year, method = "pearson")
+test_1
+test_2 = cor.test(data$suicides.100k.pop, data$gdp_per_capita...., method = "pearson")
+test_2
+```
+From the result, p value of 1.035e-11 which is small number and this tells that they are significantly important. And the cofindence interval of the correlation coefficient is between those two numbers. So this tells that two variables are significantly correalted.
+Also, for the suicide rates vs gdp, it says that p value is greater than 0.05 which is not significantly correlated so it is not necessarily related each other. Therefore, my assumption for if the economy of the country is getting higher than the suicide rate will be go up is not true.
+
+Now, I am going to split the data and make into the training set and testing set.
+```{r}
+set.seed(1)
+train_n<-sample(1:nrow(data), 0.5* nrow(data))
+train_D<-data[train_n,]
+test_D<-data[-train_n,]
+train_D
+test_D
+```
+<Best subset selection>
+```{r}
+library(leaps)
+regit.full = regsubsets(suicides.100k.pop~., data = data)
+reg.summary = summary(regit.full)
+reg.summary
+(reg.summary$rsq)
+(reg.summary$adjr2)
+(reg.summary$bic)
+(reg.summary$cp)
+par(mfrow=c(2,2))
+plot(reg.summary$rss)
+plot(reg.summary$adjr2)
+plot(reg.summary$bic)
+plot(reg.summary$cp)
+```
+Using best subset selection, it is showing that R^2 increases from 16% when only one variable is there to 35%.
+
+<Multiple linear regression>
+```{r}
+fit2 = lm(suicides.100k.pop~age+sex + HDI.for.year  +suicides_no + population + gdp_per_capita.... + year, data = data)
+coef(fit2)
+summary(fit2)
+summary(fit2)$r.sq
+summary(fit2)$sigma
+pred1 <-predict(fit2,test_D)
+MSE = mean((pred1-test_D$suicides.100k.pop)^2)
+MSE
+```
+From the coefficient of the fitting model, it's showing that the age of group 25 to 75+ years has significant connection with the suicide rates, however, age of 5-14 years which are young and have far idea from suicides has negative coefficient. Also, population has negative coefficient as well that I can tell that when the population is increasing the suicide rates will be decreasing from the ratio of population and suicide rates. Moreover, gdp per capita has negative coefficient as well and that is telling that country's economy has not a lot of impact to the suicide rates which is sligthly different what I was trying to firgure it out from the data. However, HDI for year of the country is positive with the increasing of suicide rates and that's telling me that people's happiness is direct proportion with the suicide rates. Also I calculate the mean squared error of multiple linear regression and I got the value of 200.1201.  
+
+<Ridge regression>
+```{r}
+suicides.100k.pop = data$suicides.100k.pop
+age = data$age
+HDI.for.year = data$HDI.for.year
+suicides_no = data$suicides_no
+population = data$population
+gdp_per_capita.... = data$gdp_per_capita....
+sex= data$sex
+year = data$year
+x<-model.matrix(suicides.100k.pop~age+sex + HDI.for.year  +suicides_no + population + gdp_per_capita.... + year, data = train_D)
+y <- model.matrix(suicides.100k.pop~age+sex + HDI.for.year  +suicides_no + population + gdp_per_capita.... + year, data = test_D)
+
+
+library(glmnet)
+grid = 10^seq(10,-2,length = 100)
+ridge.mod = glmnet(x, train_D$suicides.100k.pop, alpha = 0, lambda = grid, thresh = 1e-12)
+cv.out<-cv.glmnet(x, train_D$suicides.100k.pop, alpha=0, lambda=grid)
+dim(coef(ridge.mod))
+plot(cv.out)
+bestlam<-cv.out$lambda.min
+bestlam
+
+ridge.pred = predict(ridge.mod, s= bestlam, newx = y)
+test_MSE = mean((ridge.pred - test_D$suicides.100k.pop)^2)
+test_MSE
+```
+
+
+For the ridge regression, I have to make two matrices such as x and y that based on the dependent varialbes but with different set of data such as I splitted it. And then using glmnet function to perform the ridge regression. To find the best lamda we must use cv .glmnet which is cross validation to choose the parameter. And I got the best lambda at 0.09326033.  This is the smallest cross validation error. Therefore using this, I could find the test MSE which is 201.687 which is slightly higher than the multiple linear regreesion test MSE. 
+
+<LASSO>
+```{r}
+library(glmnet)
+lasso.mod = glmnet(x,train_D$suicides.100k.pop,alpha = 1)
+plot(lasso.mod)
+cv.out<-cv.glmnet(x, train_D$suicides.100k.pop, alpha=1, lambda=grid, thresh=1e-12)
+bestlam = cv.out$lambda.min
+lasso.pred = predict(lasso.mod, s = bestlam, newx = y)
+mean((lasso.pred-test_D$suicides.100k.pop)^2)
+```
+
+
+From the lasso regression we got that the test MSE of 201.6928 which is slightly higher than ridge regression and the multiple linear regression.However, ridge is slighty better than lasso when the predictor variables are relevant and correlated. For this datasets, ridge regression will be useful than lasso since the variables are correlated.
+
+<PCR and PLS>
+```{r}
+library(pls)
+pcr.fit = pcr(suicides.100k.pop~age+sex + HDI.for.year  +suicides_no + population + gdp_per_capita.... + year, data = train_D,scale = TRUE, validation = "CV")
+summary(pcr.fit)
+validationplot(pcr.fit, val.type = "MSEP")
+pcr.pred = predict(pcr.fit, newx=x[-train_D,], ncomp = 10)
+```
+***this code was working.
+mean((pcr.pred-test_D$suicides.100k.pop)^2)
+
+I use pcr to compare the test MSE and pcr is different from the other method because its standardizing each predictors. Therefore the scale on variables is not have an effect. From the plot I can see that the smallest cross validation error cocurs when M = 10. For the test MSE i got 420.6046 which is not really huge number from other method so it is not useful for this dataset.
+
+```{r}
+library(pls)
+pls.fit = plsr(suicides.100k.pop~age+sex + HDI.for.year  +suicides_no + population + gdp_per_capita.... + year, data = train_D, scale = TRUE, validation = "CV")
+summary(pcr.fit)
+validationplot(pcr.fit, val.type = "MSEP")
+pls.pred = predict(pls.fit, newx= x[-train_D,], ncomp = 10)
+```
+**this code was working
+mean((pls.pred-test_D$suicides.100k.pop)^2)
+
+For the partial least squares, the lowest cross validation error occurs wehn M = 10 as well and the test MSE is 421.4797 which is really higher than other method. Therefore PLS and PCR method is not useful in this datasets.
+<trees>
+```{r}
+require(tree)
+require(ISLR)
+tree.suiciderates = tree(suicides.100k.pop~age+sex + HDI.for.year  +suicides_no + population + gdp_per_capita.... + year, data = train_D)
+summary(tree.suiciderates)
+plot(tree.suiciderates)
+text(tree.suiciderates, pretty = 0)
+
+cv.rate = cv.tree(tree.suiciderates)
+plot(cv.rate$size, cv.rate$dev, type ='b')
+prune = prune.tree(tree.suiciderates, best = 5)
+plot(prune)
+text(prune, pretty = 0)
+
+prediction = predict(tree.suiciderates, newdata = train_D)
+mean((prediction - test_D$suicides.100k.pop)^2)
+```
+The summary gives that it use only 4 variables in the tree. Also the plot shows that the most complex tree is selected by the cross validation method. From the tree I can see that the counts of suicide is the most important variable and it's the root of the tree. The pruned tree shoes the best tree by cv and more simple and easy to interpret it. In this pruned tree i calculated the test MSE which is 523.6872 and this is way more higher than pcr and pls. Therefore,it is hard to use this method and the reason why the test mse is higher for the pruned tree is that it actually used 3 variables for the tree and it makes the test mse different. 
+
+<Random forest>
+```{r}
+require(randomForest)
+bag = randomForest(suicides.100k.pop~age+sex + HDI.for.year  +suicides_no + population + gdp_per_capita.... + year, data = train_D, mtry = 7, importance = TRUE)
+predict_3 = predict(bag, newdata =train_D)
+mean((predict_3-test_D$suicides.100k.pop)^2)
+```
+From random forest, I use smaller value of mtry which is 7 to be all 7 predictors should be considered for each split of the tree. However, I got large number of test MSE which is 565.4169 almost similar number to trees. The test set MSE is relate with the bagged regression tree so it is possible that the test set MSE for random forest and trees have similar numbers but it's not a good method for my datasets.
+
+<Conclusion>
+From the analysis, I could see that the HDI for year of each country is most significant factor in the data with the suicide rates. I assumed that the gdp per capita will impact more than the HDI rates but it was not. However, there is a big change for HDI because from the person's happiness and if the country has the low HDI and it will most likely to have a high suicide rates and vice versa. Also, from the model that I tried to observe it such as lasso, ridge, pcr/pls and more, and I calculated to get the test mean square of error and multiple linear regression has the lowest. I believe that the other factor and variables might apply so I believe this is the reason why I got the lowest test mse for multiple linear regression.  However, it was hard to find other factors of it since the data is too large and complex due to the not avaliable datas. Also, suicide is really personal and we cannot just assume that only the money is the reason of the suicide.There will be mental illness issues or may other factors that people is going through this. Moreover, in this report, I used dplyr,leaps, glmnet,ggally,ggplot, ,pls, tree, ISLR and randomforest. I learned new statistical package such as ggally which shows the relationship between the two varaible and the correlationship. It is using the box diagram so it is really visualize and easy to interpret it. 
+
+References:
+-Introduction to statistical learning 7th edition
+https://www.kaggle.com/russellyates88/suicide-rates-overview-1985-to-2016 : for the dataset
+-https://cran.r-project.org/web/packages/GGally/index.html : ggally information
+-https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm : random forest
+-https://conservancy.umn.edu/bitstream/handle/11299/189222/LinearRegression_fulltext.pdf?sequence=5&isAllowed=y 
+
+  
